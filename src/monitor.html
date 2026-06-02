@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Usage · oMLX</title>
+  <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
+
+  <!--
+    Theme picker — same pattern as oMLX admin.
+    localStorage 'omlx-chat-theme' is one of 'light' | 'dark' | 'auto' (default 'auto').
+    Sets both `data-theme="…"` (for CSS variables) and `html.dark` class (for panel.js dark
+    detection). Listens for system-theme changes when in 'auto' mode, and for cross-tab
+    updates when the user toggles theme from the admin page.
+  -->
+  <script>
+    (function () {
+      var mql = window.matchMedia('(prefers-color-scheme: dark)');
+      function apply() {
+        var setting = localStorage.getItem('omlx-chat-theme') || 'auto';
+        var resolved = setting === 'auto' ? (mql.matches ? 'dark' : 'light') : setting;
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.documentElement.classList.toggle('dark', resolved === 'dark');
+      }
+      apply();
+      mql.addEventListener('change', apply);
+      window.addEventListener('storage', function (e) {
+        if (e.key === 'omlx-chat-theme') apply();
+      });
+    })();
+  </script>
+
+  <style>
+    /* oMLX admin theme tokens (copied from dashboard.css). */
+    :root {
+      --bg-primary:     #ffffff;
+      --bg-secondary:   #f8fafc;
+      --bg-tertiary:    #f1f5f9;
+      --text-primary:   #0f172a;
+      --text-secondary: #475569;
+      --text-tertiary:  #64748b;
+      --text-muted:     #94a3b8;
+      --border-faint:   #e2e8f0;
+      --border-normal:  #cbd5e1;
+      color-scheme: light dark;
+    }
+    [data-theme="dark"] {
+      --bg-primary:     #1d1d20;
+      --bg-secondary:   #252529;
+      --bg-tertiary:    #2d2d32;
+      --text-primary:   #efefef;
+      --text-secondary: #a1a1aa;
+      --text-tertiary:  #71717a;
+      --text-muted:     #52525b;
+      --border-faint:   #3f3f46;
+      --border-normal:  #52525b;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .orm-nav {
+      position: sticky; top: 0; z-index: 50;
+      width: 100%;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border-faint);
+      background: var(--bg-primary);
+    }
+    .orm-nav-inner {
+      max-width: 80rem; margin: 0 auto;
+      display: flex; align-items: center;
+    }
+    .orm-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all .15s;
+    }
+    .orm-back:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    main { max-width: 80rem; margin: 0 auto; padding: 32px 24px; }
+  </style>
+</head>
+<body>
+  <nav class="orm-nav">
+    <div class="orm-nav-inner">
+      <!-- Text gets replaced by panel.js after i18n resolves; default English placeholder here. -->
+      <a href="/admin/dashboard" class="orm-back" data-orm-back>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+         Back to Dashboard
+      </a>
+    </div>
+  </nav>
+  <main>
+    <div id="orm-mount"></div>
+  </main>
+  <script src="/custom/panel.js" defer></script>
+</body>
+</html>
