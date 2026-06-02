@@ -8,7 +8,7 @@ PP/TG progress.
 > ⚠ This is a **community sidecar**, not part of oMLX. It works by injecting
 > a tab into the admin navbar via nginx `sub_filter`. Tracking a feature
 > request to make this a first-class oMLX feature in
-> [jundot/omlx#TODO](#).
+> [jundot/omlx#1604](https://github.com/jundot/omlx/issues/1604).
 
 ![screenshot placeholder](docs/screenshots/overview.png)
 
