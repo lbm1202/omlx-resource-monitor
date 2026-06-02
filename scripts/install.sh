@@ -20,7 +20,13 @@
 set -euo pipefail
 
 # ── Defaults ────────────────────────────────────────────────────────────────
-INSTALL_DIR_DEFAULT="$HOME/.local/share/omlx-resource-monitor"
+# Default install dir must be readable by the nginx worker user (which can be
+# `nobody` in some configs). $HOME/.local/share is *not* world-readable on
+# most setups → prefer a system share dir.
+if   [ -d /opt/homebrew/share ]; then INSTALL_DIR_DEFAULT="/opt/homebrew/share/omlx-resource-monitor"
+elif [ -d /usr/local/share ];    then INSTALL_DIR_DEFAULT="/usr/local/share/omlx-resource-monitor"
+else                                  INSTALL_DIR_DEFAULT="$HOME/.local/share/omlx-resource-monitor"
+fi
 NGINX_SERVERS_DIR_DEFAULT="/opt/homebrew/etc/nginx/servers"
 LAUNCH_AGENT_LABEL="com.omlx-resource-monitor"
 NGINX_CONF_NAME="omlx-resource-monitor.conf"
@@ -107,6 +113,27 @@ confirm() {
   case "$reply" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
+# Identify the nginx worker user (defaults to launching user; can be 'nobody'
+# if `user nobody;` is set in nginx.conf). Returns empty if nginx isn't running.
+nginx_worker_user() {
+  local pid
+  pid="$(pgrep -f 'nginx: worker' | head -1 || true)"
+  [ -n "$pid" ] || return 0
+  ps -p "$pid" -o user= 2>/dev/null | tr -d '[:space:]'
+}
+
+# Walk every ancestor directory of $1 and ensure it has o+x (path traversal).
+# Returns 0 if all good, 1 if some ancestor blocks the given user.
+ancestors_world_traversable() {
+  local p="$1"
+  while [ "$p" != "/" ] && [ -n "$p" ]; do
+    if [ "$(stat -f '%Lp' "$p" 2>/dev/null | awk '{print substr($0,3,1)}')" -lt 1 ]; then
+      return 1
+    fi
+    p="$(dirname "$p")"
+  done
+}
+
 
 # ── Step 1: environment checks ──────────────────────────────────────────────
 step "Checking environment"
@@ -187,6 +214,40 @@ run cp "$SRC_DIR/panel.js"           "$INSTALL_DIR/panel.js"
 run cp "$SRC_DIR/monitor.html"       "$INSTALL_DIR/monitor.html"
 run chmod 0644 "$INSTALL_DIR"/*
 ok "Copied 3 files"
+
+
+# ── Step 3b: ensure nginx worker can read INSTALL_DIR ───────────────────────
+# Failure here is the #1 cause of "panel.js 403/404" after install. Catch it
+# early so the user gets a clear message instead of a silent broken page.
+step "Verifying nginx can read install dir"
+
+NGINX_USER="$(nginx_worker_user)"
+CURRENT_USER="$(id -un)"
+
+if [ -z "$NGINX_USER" ]; then
+  note "nginx isn't running yet — skipping read-test (it'll be tested after reload)."
+elif [ "$NGINX_USER" = "$CURRENT_USER" ]; then
+  ok "nginx worker runs as $NGINX_USER (same as installer) — install dir is readable."
+else
+  note "nginx worker runs as $NGINX_USER (≠ $CURRENT_USER)"
+  # Defensive: make sure (a) every ancestor of INSTALL_DIR is o+x and
+  # (b) files inside are o+r. Our chmod 0644 + 0755 already do (b); ancestors
+  # are the common gotcha (e.g., $HOME/.local/share when $HOME is 700).
+  if ! ancestors_world_traversable "$INSTALL_DIR"; then
+    warn "Path $INSTALL_DIR has an ancestor without world-traverse (o+x) — nginx"
+    warn "worker '$NGINX_USER' won't be able to reach files inside."
+    warn ""
+    warn "Easiest fix: rerun with --install-dir under a system share path, e.g.:"
+    warn "  --install-dir $INSTALL_DIR_DEFAULT"
+    warn ""
+    warn "Or: chmod o+x on each ancestor (less recommended)."
+    if ! confirm "Continue anyway?"; then
+      die "Aborted — pick a world-readable install dir and retry."
+    fi
+  else
+    ok "Path is traversable by '$NGINX_USER'."
+  fi
+fi
 
 
 # ── Step 4: nginx config ────────────────────────────────────────────────────

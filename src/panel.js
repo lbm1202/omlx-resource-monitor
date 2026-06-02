@@ -174,18 +174,30 @@
   }
 
   async function initLang() {
-    // Pull oMLX's configured UI language; fall back to browser preference, then 'en'.
+    // Resolution order (first match wins):
+    //   1. document.documentElement.lang — set by oMLX Jinja on injected admin
+    //      pages. On monitor.html (our own) this is "en" by default; the fetch
+    //      below upgrades it.
+    //   2. /admin/api/global-settings → ui.language — authoritative for the
+    //      monitor page itself (no Jinja context).
+    //   3. navigator.language — last-ditch fallback.
+    const htmlLang = document.documentElement.lang || '';
+    if (htmlLang && I18N[htmlLang]) lang = htmlLang;
+
     try {
       const r = await fetch('/admin/api/global-settings', { cache: 'no-store' });
       if (r.ok) {
         const s = await r.json();
-        const ui = (s && (s.ui_language || (s.global_settings && s.global_settings.ui_language))) || '';
+        const root = (s && (s.global_settings || s)) || {};
+        const ui = (root.ui && root.ui.language) || root.ui_language || '';
         if (ui && I18N[ui]) { lang = ui; return; }
-        // Map oMLX dialects to closest supported ('zh', 'zh-TW', 'ja' → 'en' until translated).
       }
     } catch (_) {}
-    const nav = (navigator.language || '').slice(0, 2);
-    if (I18N[nav]) lang = nav;
+
+    if (!(htmlLang && I18N[htmlLang])) {
+      const nav = (navigator.language || '').slice(0, 2);
+      if (I18N[nav]) lang = nav;
+    }
   }
 
   // ─── State ────────────────────────────────────────────────────────────────
@@ -388,16 +400,7 @@
   // Translate the "Back to dashboard" link in the host page (monitor.html).
   function localizeChrome() {
     const back = document.querySelector('[data-orm-back]');
-    if (back) {
-      // Replace text-node only — keep the SVG icon untouched.
-      for (const node of back.childNodes) {
-        if (node.nodeType === 3) {
-          node.nodeValue = ' ' + t('back_to_dashboard');
-          return;
-        }
-      }
-      back.appendChild(document.createTextNode(' ' + t('back_to_dashboard')));
-    }
+    if (back) back.textContent = t('back_to_dashboard');
     const title = document.querySelector('title');
     if (title) title.textContent = t('panel_title') + ' · oMLX';
   }
